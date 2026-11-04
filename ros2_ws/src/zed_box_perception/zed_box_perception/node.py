@@ -126,7 +126,7 @@ class ZedPerceptionNode(Node):
         cal = cfg.calibration_parameters
         self.cal_left = cal.left_cam
         self.cal_right = cal.right_cam
-        self.baseline_m = abs(float(cal.T.x))
+        self.baseline_m = abs(float(cal.stereo_transform.get_translation().get()[0]))
         self.width = int(cfg.resolution.width)
         self.height = int(cfg.resolution.height)
         self.get_logger().info(
