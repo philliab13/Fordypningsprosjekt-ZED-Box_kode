@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+build/
+install/
+log/
+*.engine
+*.pt
+*.onnx
+*.svo
+*.db3
+*.mcap
+.venv/
