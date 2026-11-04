@@ -7,7 +7,7 @@ ENV LC_ALL=C.UTF-8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl gnupg2 lsb-release ca-certificates software-properties-common \
-    libturbojpeg libopencv-dev python3-colcon-common-extensions \
+    libturbojpeg libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
