@@ -36,10 +36,14 @@ def make_image(array, encoding, timestamp_ns, frame_id):
     return msg
 
 
-def make_camera_info(cam, width, height, timestamp_ns, frame_id, right_tx=0.0):
-    # ZED SDK camera parameters are defined in pixels for the active resolution.
-    fx, fy = float(cam.fx), float(cam.fy)
-    cx, cy = float(cam.cx), float(cam.cy)
+def make_camera_info(cam, width, height, timestamp_ns, frame_id,
+                     native_width, native_height, right_tx=0.0):
+    # ZED camera intrinsics are expressed at the acquisition resolution.
+    # Scale K and P for SDK-downscaled rectified images/depth.
+    sx = width / native_width
+    sy = height / native_height
+    fx, fy = float(cam.fx) * sx, float(cam.fy) * sy
+    cx, cy = float(cam.cx) * sx, float(cam.cy) * sy
     msg = CameraInfo()
     stamp_from_ns(msg.header, timestamp_ns, frame_id)
     msg.height, msg.width = height, width
@@ -47,7 +51,7 @@ def make_camera_info(cam, width, height, timestamp_ns, frame_id, right_tx=0.0):
     msg.d = [float(x) for x in cam.disto]
     msg.k = [fx, 0., cx, 0., fy, cy, 0., 0., 1.]
     msg.r = [1., 0., 0., 0., 1., 0., 0., 0., 1.]
-    msg.p = [fx, 0., cx, float(right_tx), 0., fy, cy, 0., 0., 0., 1., 0.]
+    msg.p = [fx, 0., cx, float(right_tx) * sx, 0., fy, cy, 0., 0., 0., 1., 0.]
     return msg
 
 
@@ -68,6 +72,9 @@ class ZedPerceptionNode(Node):
         self.publish_depth = bool(param('publish_depth', True))
         self.publish_imu = bool(param('publish_imu', True))
         self.camera_fps = int(param('camera_fps', 15))
+        self.pub_resolution = str(param('pub_resolution', 'CUSTOM')).upper()
+        self.pub_downscale_factor = float(param('pub_downscale_factor', 2.0))
+        self.pub_frame_rate = float(param('pub_frame_rate', 0.0))
         self.depth_mode = str(param('depth_mode', 'PERFORMANCE')).upper()
         self.max_depth_m = float(param('max_depth_m', 20.0))
         self.yolo_conf = float(param('yolo_conf', 0.25))
@@ -111,6 +118,7 @@ class ZedPerceptionNode(Node):
             raise RuntimeError('ZED open failed: {}'.format(status))
 
         self.left = sl.Mat()
+        self.left_native = sl.Mat()  # Full-resolution image for local TensorRT inference
         self.right = sl.Mat()
         self.depth = sl.Mat()
         self.runtime = sl.RuntimeParameters()
@@ -129,9 +137,25 @@ class ZedPerceptionNode(Node):
         self.baseline_m = abs(float(cal.stereo_transform.get_translation().get()[0]))
         self.width = int(cfg.resolution.width)
         self.height = int(cfg.resolution.height)
+        if self.pub_resolution not in ('NATIVE', 'CUSTOM'):
+            raise ValueError("pub_resolution must be NATIVE or CUSTOM")
+        if self.pub_downscale_factor < 1.0:
+            raise ValueError("pub_downscale_factor must be >= 1.0")
+        if self.pub_frame_rate < 0 or (
+            self.source == 'live' and self.pub_frame_rate > self.camera_fps
+        ):
+            raise ValueError("pub_frame_rate must be 0 or between 0 and camera_fps")
+        factor = self.pub_downscale_factor if self.pub_resolution == 'CUSTOM' else 1.0
+        # Even dimensions match the SDK's usual image output constraints.
+        self.pub_width = max(2, int(self.width / factor) // 2 * 2)
+        self.pub_height = max(2, int(self.height / factor) // 2 * 2)
+        self.pub_size = sl.Resolution(self.pub_width, self.pub_height)
+        self.last_visual_publish = None
         self.get_logger().info(
-            'ZED opened %dx%d; baseline %.4f m; YOLO=%s' %
-            (self.width, self.height, self.baseline_m, self.enable_yolo)
+            'ZED opened %dx%d; publishing %dx%d at %s FPS; baseline %.4f m; YOLO=%s' %
+            (self.width, self.height, self.pub_width, self.pub_height,
+             'grab rate' if self.pub_frame_rate == 0 else str(self.pub_frame_rate),
+             self.baseline_m, self.enable_yolo)
         )
         self.nframes = 0
         self.last_report = time.monotonic()
@@ -149,66 +173,119 @@ class ZedPerceptionNode(Node):
             return
 
         timestamp_ns = int(self.zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds())
-        self.zed.retrieve_image(self.left, sl.VIEW.LEFT)
-        bgra = np.asarray(self.left.get_data())
-        bgr = cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
-        h, w = bgr.shape[:2]
-
-        if self.publish_rgb:
-            self.pubs['left'].publish(make_image(bgr, 'bgr8', timestamp_ns, self.left_frame))
-        self.pubs['left_info'].publish(
-            make_camera_info(self.cal_left, w, h, timestamp_ns, self.left_frame)
+        now = time.monotonic()
+        publish_visual = (
+            self.pub_frame_rate == 0
+            or self.last_visual_publish is None
+            or now - self.last_visual_publish >= 1.0 / self.pub_frame_rate
         )
+        if publish_visual:
+            self.last_visual_publish = now
 
-        if self.publish_right:
-            self.zed.retrieve_image(self.right, sl.VIEW.RIGHT)
-            right_bgr = cv2.cvtColor(np.asarray(self.right.get_data()), cv2.COLOR_BGRA2BGR)
-            self.pubs['right'].publish(make_image(right_bgr, 'bgr8', timestamp_ns, self.right_frame))
-        # Right projection Tx = -fx * baseline_m for rectified stereo.
-        self.pubs['right_info'].publish(make_camera_info(
-            self.cal_right, w, h, timestamp_ns, self.right_frame,
-            right_tx=-float(self.cal_right.fx) * self.baseline_m
-        ))
+        # Keep full-resolution imagery local for YOLO. Retrieve the published
+        # imagery separately at lower resolution directly through the ZED SDK.
+        bgr = None
+        if self.model is not None:
+            self.zed.retrieve_image(self.left_native, sl.VIEW.LEFT)
+            bgr = cv2.cvtColor(
+                np.asarray(self.left_native.get_data()), cv2.COLOR_BGRA2BGR
+            )
 
-        if self.publish_depth:
-            self.zed.retrieve_measure(self.depth, sl.MEASURE.DEPTH)
-            depths = np.array(self.depth.get_data(), dtype=np.float32, copy=True)
-            depths[~np.isfinite(depths)] = np.nan
-            self.pubs['depth'].publish(make_image(depths, '32FC1', timestamp_ns, self.left_frame))
+        if publish_visual:
+            if self.publish_rgb:
+                self.zed.retrieve_image(
+                    self.left, sl.VIEW.LEFT, sl.MEM.CPU, self.pub_size
+                )
+                left_bgr = cv2.cvtColor(
+                    np.asarray(self.left.get_data()), cv2.COLOR_BGRA2BGR
+                )
+                self.pubs['left'].publish(
+                    make_image(left_bgr, 'bgr8', timestamp_ns, self.left_frame)
+                )
+            self.pubs['left_info'].publish(
+                make_camera_info(
+                    self.cal_left, self.pub_width, self.pub_height, timestamp_ns,
+                    self.left_frame, self.width, self.height
+                )
+            )
+
+            if self.publish_right:
+                self.zed.retrieve_image(
+                    self.right, sl.VIEW.RIGHT, sl.MEM.CPU, self.pub_size
+                )
+                right_bgr = cv2.cvtColor(
+                    np.asarray(self.right.get_data()), cv2.COLOR_BGRA2BGR
+                )
+                self.pubs['right'].publish(
+                    make_image(right_bgr, 'bgr8', timestamp_ns, self.right_frame)
+                )
+            # Right projection Tx = -fx * baseline at native resolution,
+            # then make_camera_info scales it to the published width.
+            self.pubs['right_info'].publish(
+                make_camera_info(
+                    self.cal_right, self.pub_width, self.pub_height, timestamp_ns,
+                    self.right_frame, self.width, self.height,
+                    right_tx=-float(self.cal_right.fx) * self.baseline_m
+                )
+            )
+
+            if self.publish_depth:
+                self.zed.retrieve_measure(
+                    self.depth, sl.MEASURE.DEPTH, sl.MEM.CPU, self.pub_size
+                )
+                depths = np.array(
+                    self.depth.get_data(), dtype=np.float32, copy=True
+                )
+                depths[~np.isfinite(depths)] = np.nan
+                self.pubs['depth'].publish(
+                    make_image(depths, '32FC1', timestamp_ns, self.left_frame)
+                )
 
         if self.model is not None:
+            # Infer on native ZED data even if ROS output is downscaled or capped.
             out = self.model.predict(
                 source=bgr, imgsz=self.yolo_size, conf=self.yolo_conf,
                 iou=self.yolo_iou, classes=[8], retina_masks=False, verbose=False
             )[0]
-            instances = np.zeros((h, w), dtype=np.uint16)
-            objects = []
-            if out.boxes is not None and out.masks is not None:
-                boxes = out.boxes.xyxy.cpu().numpy()
-                scores = out.boxes.conf.cpu().numpy()
-                classes = out.boxes.cls.cpu().numpy()
-                for idx, (xyxy, score, cls, polygon) in enumerate(
-                    zip(boxes, scores, classes, out.masks.xy), start=1
-                ):
-                    if idx > 65535:
-                        break
-                    poly = np.round(polygon).astype(np.int32)
-                    if len(poly) >= 3:
-                        cv2.fillPoly(instances, [poly], int(idx))
-                    objects.append({
-                        'id': idx, 'class_id': int(cls),
-                        'confidence': float(score),
-                        'bbox_xyxy': [float(v) for v in xyxy]
-                    })
-            self.pubs['instances'].publish(
-                make_image(instances, '16UC1', timestamp_ns, self.left_frame)
-            )
-            det = String()
-            det.data = json.dumps({
-                'stamp_ns': timestamp_ns, 'frame_id': self.left_frame,
-                'width': w, 'height': h, 'objects': objects
-            }, separators=(',', ':'))
-            self.pubs['detections'].publish(det)
+            if publish_visual:
+                instances = np.zeros(
+                    (self.pub_height, self.pub_width), dtype=np.uint16
+                )
+                objects = []
+                sx = self.pub_width / self.width
+                sy = self.pub_height / self.height
+                if out.boxes is not None and out.masks is not None:
+                    boxes = out.boxes.xyxy.cpu().numpy()
+                    scores = out.boxes.conf.cpu().numpy()
+                    classes = out.boxes.cls.cpu().numpy()
+                    for idx, (xyxy, score, cls, polygon) in enumerate(
+                        zip(boxes, scores, classes, out.masks.xy), start=1
+                    ):
+                        if idx > 65535:
+                            break
+                        poly = np.round(
+                            np.asarray(polygon) * [sx, sy]
+                        ).astype(np.int32)
+                        if len(poly) >= 3:
+                            cv2.fillPoly(instances, [poly], int(idx))
+                        objects.append({
+                            'id': idx, 'class_id': int(cls),
+                            'confidence': float(score),
+                            'bbox_xyxy': [
+                                float(xyxy[0] * sx), float(xyxy[1] * sy),
+                                float(xyxy[2] * sx), float(xyxy[3] * sy)
+                            ]
+                        })
+                self.pubs['instances'].publish(
+                    make_image(instances, '16UC1', timestamp_ns, self.left_frame)
+                )
+                det = String()
+                det.data = json.dumps({
+                    'stamp_ns': timestamp_ns, 'frame_id': self.left_frame,
+                    'width': self.pub_width, 'height': self.pub_height,
+                    'objects': objects
+                }, separators=(',', ':'))
+                self.pubs['detections'].publish(det)
 
         if self.publish_imu:
             self.publish_imu_measurement()
