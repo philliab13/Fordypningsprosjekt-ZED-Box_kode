@@ -17,6 +17,19 @@ This is a focused camera publisher based on the **Stereolabs ZED ROS 2 wrapper's
 | `/zed/perception/instance_ids` | `sensor_msgs/msg/Image` | `16UC1`; 0=background, 1..N=YOLO detection IDs |
 | `/zed/perception/detections_json` | `std_msgs/msg/String` | JSON contains frame stamp, IDs, class, confidence, bbox; same index as mask |
 
+## Image output resolution and publishing rate
+
+Like the official Stereolabs wrapper, this node separates **camera acquisition resolution** from **published resolution**. The ZED SDK computes stereo at the acquisition resolution and retrieves published left/right RGB and metric `32FC1` depth at a smaller SDK output resolution (not OpenCV resizing). ROS CameraInfo K/P matrices and stereo P[3] are scaled to match. YOLO, when enabled, still receives native-resolution left images, and its published instance mask and bounding boxes are scaled to the published resolution.
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `camera_fps` | `15` | Live ZED acquisition frequency |
+| `pub_resolution` | `CUSTOM` | `CUSTOM` or `NATIVE` |
+| `pub_downscale_factor` | `2.0` | Divide both width and height by this factor for `CUSTOM` |
+| `pub_frame_rate` | `0.0` | `0` publishes every processed frame; a positive value caps output publishing in wall-clock time |
+
+Default live input is **1920×1080 at 15 FPS**, default publication resolution is **960×540**. `pub_frame_rate` throttles the image, depth, CameraInfo and YOLO output topics together, but does not throttle camera grabbing or local YOLO inference. IMU currently remains once per processed frame. This implementation uses uncompressed sensor_msgs/Image; compression is **not** yet enabled. Pub rates are best-effort caps, not guaranteed rates under load.
+
 The same **camera acquisition timestamp** is applied to left, right, depth and detection-mask data derived from each frame. The JSON contains this timestamp because `std_msgs/String` has no header. IMU uses its own hardware timestamp if available. Topics use sensor-data QoS (best effort, keep last 1) for throughput; a central recorder should use compatible QoS overrides.
 
 **Important:** The package does **not** publish camera-to-vessel TF; an accurate measured mA1 extrinsic and a clock synchronization procedure must be established separately. Rosbag recording times do not automatically synchronize separate device clocks.
@@ -57,10 +70,13 @@ ros2 run zed_box_perception zed_perception_node --ros-args \
   -p engine_path:=/workspace/data/models/yolo26n-seg.engine \
   -p source:=live \
   -p camera_fps:=15 \
-  -p depth_mode:=PERFORMANCE
+  -p depth_mode:=PERFORMANCE \\
+  -p pub_resolution:=CUSTOM \\
+  -p pub_downscale_factor:=2.0 \\
+  -p pub_frame_rate:=15.0
 ```
 
-For SVO playback use `-p source:=svo -p svo_path:=/workspace/data/data/YOUR_FILE.svo`. Set `-p enable_yolo:=false` to isolate ZED publishing. Set `-p publish_right:=false`, `-p publish_imu:=false`, or `-p publish_rgb:=false` to reduce throughput.
+For SVO playback use `-p source:=svo -p svo_path:=/workspace/data/data/YOUR_FILE.svo`. Set `-p enable_yolo:=false` to isolate ZED publishing. Set `-p publish_right:=false`, `-p publish_imu:=false`, or `-p publish_rgb:=false` to reduce throughput. For performance diagnosis, first try **left RGB only**, `-p enable_yolo:=false -p publish_right:=false -p publish_depth:=false -p publish_imu:=false`, and inspect the 10-second frame counter. Then enable additional outputs one at a time. The 960×540 default has not yet been validated on the ZED Box.
 
 If a Fast DDS peer profile is needed over campus Wi-Fi, mount the XML and export `FASTRTPS_DEFAULT_PROFILES_FILE` inside the container. For mA1 use a dedicated onboard network and test a **Humble rosbag subscriber**, not merely `ros2 topic list`.
 
