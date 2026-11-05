@@ -51,6 +51,39 @@ The runtime requires the installed ROS Foxy Python packages
 Ultralytics and the already-tested TensorRT engine. The container has NOT
 been revalidated with these two packages yet.
 
+## Foxy rosbag playback: /clock workaround
+
+The installed Foxy `ros2 bag play --help` has **no `--clock` option**.
+Instead, this branch includes a small `ma2_pose_clock` ROS node that
+publishes the header timestamps from `/navigation/pose` as
+`rosgraph_msgs/Clock`. This is sufficient to *attempt* initial synchronized
+replay with the original SVO player's `/clock` callback. It is an
+approximation: pose messages arrive at ~20 Hz, their header timestamps
+may not match bag-record arrival times exactly, and the publisher does
+not pace the rosbag. Evaluate timestamp skew and frame skips before
+using any geometry for quantitative analysis.
+
+After building and sourcing `stereo_lidar_footprint_detector`, run in
+separate terminals, **in this order**:
+
+1. Start `ros2 run stereo_lidar_footprint_detector ma2_pose_clock`
+   (**do not** set `use_sim_time=true` on the clock relay).
+2. Start `ros2 run stereo_lidar_footprint_detector ma2_svo_player --ros-args
+   -p scenario:=scen4_2
+   -p scenario_dir:=/opt/zed_official_ws/src/stereo_lidar_footprint_detector/config
+   -p data_root:=/opt/zed_official_ws/datasets/scene4_2`
+   with accessible `pyzed.sl` Python bindings.
+3. Start the rosbag: `ros2 bag play /opt/zed_official_ws/datasets/scen4_2 --topics /lidar_aft/points /navigation/pose /tf /tf_static`.
+
+Because `--topics` is a **greedy** option in Foxy, provide the bag path
+before the option, and the selected topics after it. Do not use
+`--clock` on this Foxy release.
+
+This test assumes the original SVO's acquisition timestamps plus the
+scenario's clap-derived offset correspond to replayed pose and LiDAR
+timestamps. If the player reports out-of-sync timestamps, stop and
+inspect timing rather than widening fusion skew arbitrarily.
+
 ## A. Test live ZED X (no LiDAR)
 
 Keep the official ZED X wrapper running in the first terminal.
