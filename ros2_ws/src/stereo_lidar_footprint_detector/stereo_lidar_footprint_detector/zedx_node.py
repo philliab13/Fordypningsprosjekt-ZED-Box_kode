@@ -17,13 +17,12 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from .backend import PipelineBackend
 from .images import image_array
-from .sensor_helpers import nearest_cloud, project_lidar, stamp_ns, transform_matrix
+from .sensor_helpers import cloud_xyz, nearest_cloud, project_lidar, stamp_ns, transform_matrix
 
 
 class ZedXFootprintNode(Node):
@@ -132,8 +131,7 @@ class ZedXFootprintNode(Node):
             camera_from_lidar = self.lookup(
                 rgb.header.frame_id, cloud.header.frame_id,
                 rgb.header.stamp)
-        points = np.asarray(point_cloud2.read_points_numpy(
-            cloud, field_names=('x', 'y', 'z'), skip_nans=True)).reshape(-1, 3)
+        points = cloud_xyz(cloud)
         return project_lidar(points, camera_from_lidar, k,
                              (rgb.height, rgb.width))
 
