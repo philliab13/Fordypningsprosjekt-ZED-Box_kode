@@ -15,5 +15,6 @@ setup(
     license='Apache-2.0',
     entry_points={'console_scripts': [
         'zedx_footprint_node = stereo_lidar_footprint_detector.zedx_node:main',
+        'ma2_svo_player = stereo_lidar_footprint_detector.ma2_svo_player:main',
     ]},
 )
