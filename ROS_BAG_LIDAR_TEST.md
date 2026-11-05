@@ -1,3 +1,79 @@
+## Preferred 2023 MA2 playback: one timeline for rosbag and SVO
+
+Foxy's installed `ros2 bag play` lacks `--clock`; `ma2_pose_clock`
+only approximated bag time from navigation pose headers. Use
+**`ma2_bag_player` instead**. It reads the **uncompressed** SQLite
+recording, and uses the *same bag timestamps* to schedule LiDAR/TF/poses
+and publish `/clock`. The SVO player's five-clap time offset is preserved.
+
+Stop previous `ros2 bag play`, `ma2_pose_clock`, SVO player, and official
+ZED SVO wrapper before trying this method. Build and source the updated
+package. The original compressed `.db3` cannot be used with this player:
+it requires `scen4_2_uncompressed.db3`.
+
+For the **first test**, use **0.01x** playback. This is intentionally slow
+because the full-HD ZED 2 PERFORMANCE depth player previously published
+only ~0.13 frames/s. A future FPS benchmark must separately report the
+cost of SVO/depth decoding versus perception node throughput.
+
+**Terminal 1: original SVO player, with one-time startup seek**
+
+```bash
+source /opt/ros/foxy/setup.bash
+source /opt/zed_official_ws/install/setup.bash
+export PYTHONPATH=/opt/zed_official_ws/python:$PYTHONPATH
+ros2 run stereo_lidar_footprint_detector ma2_svo_player --ros-args \
+  -p scenario:=scen4_2 \
+  -p scenario_dir:=/opt/zed_official_ws/src/stereo_lidar_footprint_detector/config \
+  -p data_root:=/opt/zed_official_ws/datasets/scene4_2 \
+  -p start_ns:=1689070860509022989
+```
+
+`start_ns` is the initial recorded **bag** timestamp. The SVO player
+calculates a frame-index estimate based on SVO FPS and its first
+clap-adjusted acquisition timestamp, seeks **once at initialization**
+(approximately 17 seconds), and loads the next frame. It does **not**
+skip frames dynamically during playback. To disable the initial seek,
+omit `start_ns` (default 0).
+
+**Terminal 2: slow bag replay with built-in clock**
+
+```bash
+source /opt/ros/foxy/setup.bash
+source /opt/zed_official_ws/install/setup.bash
+ros2 run stereo_lidar_footprint_detector ma2_bag_player --ros-args \
+  -p bag_file:=/opt/zed_official_ws/datasets/scen4_2/scen4_2_uncompressed.db3 \
+  -p start_ns:=1689070860509022989 \
+  -p rate:=0.01 \
+  -p clock_hz:=20.0 \
+  -p duration_sec:=2.0
+```
+
+This example runs **two seconds of simulated recording**, taking at
+least 200 seconds at 0.01x. Remove `duration_sec` for the full
+recording after validating correct playback. Increase `rate` only if
+the SVO player can process frames at the required wall-time rate.
+The player publishes `/tf_static` as transient-local, and uses reliable
+publishers for the selected topics. Custom message types not installed
+in Foxy should not be selected.
+
+**Terminal 3: inspect topic rates, stamps, and SVO skew**
+
+```bash
+ros2 topic hz /clock
+ros2 topic hz /ma2/zed/left/image
+ros2 topic hz /lidar_aft/points
+```
+
+The `/clock` rate reports real-time wall frequency (nominally 20 Hz);
+the sensor rates scale with the playback speed. Do not compare the
+slowed-down image publisher's wall-clock Hz to live perception FPS.
+If the camera lags, lower `rate` rather than widening LiDAR timestamp
+association thresholds. The bag publisher and camera operate in separate
+processes; Python timers and SDK processing may still introduce jitter.
+Clock-controlled playback does **not** itself guarantee frame-level
+acknowledgment or lossless processing when the pipeline cannot keep up.
+
 # Stereo + LiDAR footprints and LiDAR-only near-shore boundary
 
 This branch contains two existing **algorithms**, copied from
