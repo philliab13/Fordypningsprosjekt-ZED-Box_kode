@@ -224,6 +224,7 @@ class MA2SVOPlayer(Node):
         # Playback timer
         # --------------------------------------------------
 
+        self.svo_fps = float(camera_configuration.fps)
         self.next_frame_ready = False
         self.next_left = None
         self.next_depth = None
@@ -347,6 +348,38 @@ class MA2SVOPlayer(Node):
                 f"diff={diff_ms:.1f} ms",
                 throttle_duration_sec=1.0
             )
+
+        # The recorded SVO may start many seconds before the rosbag.
+        # Without seeking, the first clock tick would compute neural depth
+        # and publish hundreds of frames that are already in the past.
+        # Jump forward conservatively, leaving a 0.5 s margin, then let
+        # the original timestamp-controlled loop process the last frames.
+        if self.next_frame_ready and self.svo_fps > 0:
+            lag_ns = clock_ns - self.next_stamp_ns
+            if lag_ns > 2_000_000_000:
+                skip_frames = int(
+                    (lag_ns - 500_000_000) * self.svo_fps / 1e9
+                )
+                if skip_frames > 0:
+                    current_idx = int(self.zed.get_svo_position())
+                    total_frames = int(self.zed.get_svo_number_of_frames())
+                    target_idx = min(
+                        current_idx + skip_frames, total_frames - 1
+                    )
+                    if target_idx > current_idx:
+                        status = self.zed.set_svo_position(target_idx)
+                        if status == sl.ERROR_CODE.SUCCESS:
+                            self.get_logger().info(
+                                f'Seeking SVO from frame {current_idx} '
+                                f'to {target_idx} to catch up with /clock '
+                                f'(lag={lag_ns / 1e9:.2f}s)'
+                            )
+                            self.load_next_frame()
+                        else:
+                            self.get_logger().warning(
+                                f'SVO seek failed ({status}); '
+                                'falling back to sequential playback'
+                            )
 
         while (
             self.next_frame_ready
