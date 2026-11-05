@@ -59,9 +59,5 @@ def image_array(msg):
 
 def cloud_xyz(msg):
     """Foxy-compatible XYZ extraction from PointCloud2."""
-    from sensor_msgs_py import point_cloud2
-    if hasattr(point_cloud2, 'read_points_numpy'):
-        return np.asarray(point_cloud2.read_points_numpy(
-            msg, field_names=('x', 'y', 'z'), skip_nans=True)).reshape(-1, 3)
-    return np.asarray(list(point_cloud2.read_points(
-        msg, field_names=('x', 'y', 'z'), skip_nans=True)), dtype=np.float32).reshape(-1, 3)
+    from .pointcloud_compat import read_xyz
+    return read_xyz(msg)
