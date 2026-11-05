@@ -52,6 +52,9 @@ class MA2SVOPlayer(Node):
         super().__init__('ma2_svo_player')
 
         self.declare_parameter('scenario', 'scen1')
+        # One-time startup seek to match the first /clock timestamp.
+        # 0 disables seeking and preserves original full-SVO playback.
+        self.declare_parameter('start_ns', 0)
         self.declare_parameter(
             'scenario_dir',
             str(Path.home() / 'Documents/Stixel_based_free_space_estimation/'
@@ -245,6 +248,42 @@ class MA2SVOPlayer(Node):
         )
 
         self.load_next_frame()
+        start_ns = int(self.get_parameter('start_ns').value)
+        if start_ns > 0 and self.next_frame_ready:
+            self.seek_to_start(start_ns)
+
+    def seek_to_start(self, start_ns):
+        """Seek ONCE during initialization, never in the clock callback.
+
+        Frame index is estimated using the first SVO acquisition timestamp,
+        with a short safety margin. No neural depth is computed for skipped
+        frames. All frames after the seek use the original clock gating.
+        """
+        fps = float(self.zed.get_camera_information().camera_configuration.fps)
+        if fps <= 0:
+            raise RuntimeError('Invalid SVO FPS for one-time initial seek')
+        gap_ns = start_ns - self.next_stamp_ns
+        if gap_ns <= 1_000_000_000:
+            self.get_logger().info(
+                f'No initial SVO seek needed; gap={gap_ns / 1e9:.2f}s')
+            return
+        frame_count = int(self.zed.get_svo_number_of_frames())
+        # Leave 0.5 second before the requested timestamp to avoid jumping
+        # beyond the first frame aligned with the rosbag.
+        delta_frames = max(0, int((gap_ns - 500_000_000) * fps / 1e9))
+        current_frame = int(self.zed.get_svo_position())
+        target_frame = min(frame_count - 1, current_frame + delta_frames)
+        self.get_logger().info(
+            f'Initial SVO seek: frame {current_frame} -> {target_frame} '
+            f'of {frame_count} (gap={gap_ns / 1e9:.2f}s)')
+        self.zed.set_svo_position(target_frame)
+        self.load_next_frame()
+        if not self.next_frame_ready:
+            raise RuntimeError('No SVO frame found after initial seek')
+        self.get_logger().info(
+            f'Initial seek complete: next_svo={self.next_stamp_ns}, '
+            f'bag_start={start_ns}, '
+            f'diff_ms={(start_ns - self.next_stamp_ns)/1e6:.1f}')
 
     def load_next_frame(self):
         while True:
