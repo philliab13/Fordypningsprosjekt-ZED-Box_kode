@@ -1,0 +1,25 @@
+# Live milliAmpere1 test, based on Fordypningsprosjekt-ros-kode MA1-test.
+# ZED X camera topics belong to the ZED Box (not the older /zed/zed_node
+# topics used with a separate ZED 2 in the original checklist).
+zedx_footprint_detector:
+  ros__parameters:
+    use_sim_time: false
+    left_topic: /zedx/zed_node/left/image_rect_color
+    depth_topic: /zedx/zed_node/depth/depth_registered
+    camera_info_topic: /zedx/zed_node/left/camera_info
+    lidar_topic: /front_lidar/ouster/points
+    output_topic: /obstacles/json
+    weights: /opt/zed_official_ws/models/yolo26n-seg.engine
+    baseline_m: 0.120001
+    max_stereo_depth_m: 20.0
+    enable_lidar: true
+    require_lidar: false
+    lidar_max_skew_s: 0.5
+    sync_slop_s: 0.03
+    # UNVERIFIED: do not invent TF or reference frame. LiDAR fusion requires
+    # camera optical <-> actual lidar frame TF and shared timestamps.
+    fixed_frame: ''
+    # Leave blank until the new mA1 recording establishes a connected,
+    # calibrated, Z-up water-plane frame. Resulting footprints before that
+    # are NOT calibrated map/water-plane footprints.
+    water_frame: ''
