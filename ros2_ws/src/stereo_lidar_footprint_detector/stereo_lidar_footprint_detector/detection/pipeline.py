@@ -3,6 +3,7 @@
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
@@ -17,7 +18,7 @@ class FrameResult:
     lidar_xyz: np.ndarray
     runtime_ms: float
     obstacles: dict
-    annotated_image: np.ndarray | None = None
+    annotated_image: Optional[np.ndarray] = None
 
 
 class FreeSpacePipeline:
