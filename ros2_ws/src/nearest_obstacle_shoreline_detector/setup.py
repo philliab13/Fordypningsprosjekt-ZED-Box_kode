@@ -8,6 +8,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + name]),
         ('share/' + name, ['package.xml']),
         ('share/' + name + '/config', glob('config/*.yaml')),
+        ('share/' + name + '/launch', glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools', 'numpy', 'scipy'], zip_safe=True,
     maintainer='phillip-andre', maintainer_email='philliab@stud.ntnu.no',
