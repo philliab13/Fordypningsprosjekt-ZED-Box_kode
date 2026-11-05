@@ -14,7 +14,7 @@ from std_msgs.msg import Header, String
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformException, TransformListener
 
-from .inputs import transform_matrix
+from .inputs import cloud_xyz, transform_matrix
 from .lidar_projection import nearest_boundary, project_to_water
 
 
@@ -61,7 +61,7 @@ class LidarProjectionNode(Node):
             transform = transform_matrix(self.buffer.lookup_transform(
                 self.p['water_frame'], msg.header.frame_id, Time.from_msg(msg.header.stamp),
                 timeout=Duration(seconds=0.0)).transform)
-            points = point_cloud2.read_points_numpy(msg, field_names=('x', 'y', 'z'), skip_nans=True)
+            points = cloud_xyz(msg)
             filtered, projected, heights = project_to_water(
                 points, transform, self.p['water_level_m'],
                 self.p['min_height_m'], self.p['max_height_m'])
