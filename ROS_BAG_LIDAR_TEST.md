@@ -64,6 +64,59 @@ This is the already-tested stereo-only configuration. Until
 `water_frame` is set with valid TF, output geometry is in a **synthetic
 camera-right/forward plane**, not vessel/map coordinates.
 
+## MA2 clock-synchronized SVO publisher (preferred for recorded MA2 test)
+
+The original `ma2_svo_player.py` and `scenario.py` have now been copied
+from `Fordypningsprosjekt-ros-kode/src/stixel_free_space` into the
+`stereo_lidar_footprint_detector` package, unchanged. The original
+`scen4_2` clap timestamps have been added in `config/scen4_2.yaml`;
+its SVO path is adapted to the mounted ZED Box dataset directory.
+**Do not run the official ZED 2 SVO wrapper at the same time.** That
+wrapper replay was observed to stamp images with current wall time, not
+the July 2023 acquisition timestamps; the original SVO player applies
+the measured offset and publishes on the bag's `/clock` instead.
+
+`pyzed.sl` is mandatory for the original player. It was **missing from
+the existing `zedx-official` container** even though the C++ wrapper
+worked. First find host-side bindings:
+
+```bash
+# ZED Box host, not Docker
+find /home/user -path '*/pyzed/sl*.so' -o -path '*/pyzed/sl.py' 2>/dev/null
+```
+
+If the bindings are in `/home/user/.local/lib/python3.8/site-packages/pyzed`,
+make them visible using the already-mounted workspace, without rebuilding Docker:
+
+```bash
+mkdir -p ~/zed_official_ws/python
+cp -a /home/user/.local/lib/python3.8/site-packages/pyzed ~/zed_official_ws/python/
+```
+
+Then inside `zedx-official`, in the shell that will run the SVO player:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source /opt/zed_official_ws/install/setup.bash
+export PYTHONPATH=/opt/zed_official_ws/python:$PYTHONPATH
+python3 -c 'import pyzed.sl as sl; print("pyzed import OK")'
+ros2 run stereo_lidar_footprint_detector ma2_svo_player --ros-args \
+  -p scenario:=scen4_2 \
+  -p scenario_dir:=/opt/zed_official_ws/src/stereo_lidar_footprint_detector/config \
+  -p data_root:=/opt/zed_official_ws/datasets/scene4_2
+```
+
+If the binding import or SVO open fails, fix that before starting the bag.
+The SVO player subscribes to `/clock`, so it should be started BEFORE
+`ros2 bag play ... --clock`. It will publish the four original camera topics
+(`/ma2/zed/left/image`, `/ma2/zed/depth`,
+`/ma2/zed/disparity`, `/ma2/zed/camera_info`) as the bag clock advances.
+
+If no host-side binding exists, the SDK Python package needs to be
+installed for the *matching* JetPack/Python/ZED SDK 4.0.6 environment.
+Do not assume that the current host Python and container Python share
+their search paths.
+
 ## B. Test the 2023 MA2 dataset (recorded LiDAR + recorded camera)
 
 **Critical distinction:** The existing MA2 dataset includes an SVO camera
