@@ -54,8 +54,7 @@ source /opt/zed_official_ws/install/setup.bash
 ros2 launch zed_wrapper zedx.launch.py
 ```
 
-Terminal B, footprint detector using mA1 front Ouster, but without a
-verified water plane or fixed frame **yet**:
+Terminal B, footprint detector using mA1 front Ouster, with a **provisional** water plane and no fixed frame:
 
 ```bash
 source /opt/ros/foxy/setup.bash
@@ -65,11 +64,10 @@ ros2 run stereo_lidar_footprint_detector zedx_footprint_node --ros-args \
 ```
 
 The footprint config sets `enable_lidar: true`, `require_lidar: false`
-and `water_frame: ''`. Until a calibrated camera-to-LiDAR transform exists,
-the node may reject frames when an actual LiDAR scan is selected. The blank
-water frame is **only suitable for pipeline startup**; it is not a
-calibrated mA1 footprint for a planner. To smoke-test stereo only, override
-`-p enable_lidar:=false` after the params file.
+and `water_frame: ma1_water_plane`. Both the ZED X mount and water height are
+**provisional only**; results are not calibrated for a planner. Missing camera-
+to-LiDAR TF or mismatched device timestamps can reject camera frames. For a
+stereo-only smoke test, override `-p enable_lidar:=false` after the params file.
 
 Terminal C, shoreline detector:
 
@@ -80,11 +78,52 @@ ros2 run nearest_obstacle_shoreline_detector lidar_projection_node --ros-args \
   --params-file /opt/zed_official_ws/src/nearest_obstacle_shoreline_detector/config/ma1_live.yaml
 ```
 
-**Do not interpret shoreline output yet**: `ma1_water_plane` is
-currently a *placeholder* target TF frame, not verified as an existing
-Z-up water plane. With no matching TF, the detector will publish an
-error/no-boundary status. The nearest-obstacle boundary also is not
-semantically guaranteed to be shoreline.
+**Do not interpret shoreline geometry as calibrated**: `ma1_water_plane`
+is a provisional frame 0.50 m below vessel_center (assuming Z up). The plane
+follows vessel roll and pitch, and the LiDAR clock remains unsynchronized.
+The nearest-obstacle boundary is not semantically guaranteed to be shoreline.
+
+## Provisional mounting geometry
+
+Requested temporary assumptions, measured relative to `vessel_center`:
+
+- ZED X root mount: translation [0, 0, +1.0] m, identity rotation
+- Water-plane frame `ma1_water_plane`: [0, 0, -0.50] m, identity rotation
+- Front Ouster `os_lidar`: [2, 1, 0] m, identity rotation
+- Ouster driver `os_sensor -> os_lidar`: [0, 0, 0.078] m, yaw +pi
+- Therefore `vessel_center -> os_sensor`: [2, 1, -0.078] m, yaw +pi
+
+The ZED X frame name `zedx_camera_link` is **provisional**, and may already
+have a parent from the official ZED wrapper's robot_state_publisher. Check
+`view_frames` before using the following launch; there must not be two
+different parents for the same frame. The launch publishes only the **two
+new provisional frames**; it does not launch the ZED camera, and does not
+publish the front-Ouster mounting TF.
+
+```bash
+ros2 launch nearest_obstacle_shoreline_detector ma1_zedx_with_placeholders.launch.py
+```
+
+The command above requires a rebuild to install the launch file, and must be
+run in a terminal with ROS and overlay sourced. It should be used only if
+`zedx_camera_link` is confirmed to be the correct wrapper root with no
+conflicting TF. Otherwise run only the water plane until that root is known:
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  0 0 -0.5 0 0 0 vessel_center ma1_water_plane
+```
+
+For the separately verified front-Ouster mount (publish only once):
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  2.0 1.0 -0.078 0 0 3.141592653589793 vessel_center os_sensor
+```
+
+Do not run duplicate TF publishers. LiDAR timestamps in the 2026-09-11
+recording appeared around 8929 seconds while nav/TF used epoch timestamps;
+that clock mismatch must be resolved to perform time-correct transforms.
 
 ## Verify when connected to mA1
 
@@ -102,7 +141,7 @@ Check `header.frame_id` of the front cloud, the camera optical frame,
 the timestamp base on both devices, and TF connectivity. Do not run the
 MA2 `/clock`, bag playback, or SVO player in this live mode.
 
-## Frames remain unresolved until new recording / mA1 inspection
+## Frames still requiring real-world verification
 
 The old `MA1-test` checklist proposed `ma1_water_plane`, `base_link`,
 `os_sensor`, and `piren`, and described approximate mounting
