@@ -56,3 +56,12 @@ def image_array(msg):
     if channels == 1:
         return data[:, :, 0].astype(np.float32)
     return np.ascontiguousarray(data[:, :, ::-1] if msg.encoding == 'rgb8' else data)
+
+def cloud_xyz(msg):
+    """Foxy-compatible XYZ extraction from PointCloud2."""
+    from sensor_msgs_py import point_cloud2
+    if hasattr(point_cloud2, 'read_points_numpy'):
+        return np.asarray(point_cloud2.read_points_numpy(
+            msg, field_names=('x', 'y', 'z'), skip_nans=True)).reshape(-1, 3)
+    return np.asarray(list(point_cloud2.read_points(
+        msg, field_names=('x', 'y', 'z'), skip_nans=True)), dtype=np.float32).reshape(-1, 3)
