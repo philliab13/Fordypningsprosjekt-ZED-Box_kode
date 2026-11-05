@@ -5,8 +5,8 @@ lidar_water_projection:
   ros__parameters:
     use_sim_time: false
     lidar_topic: /front_lidar/ouster/points
-    # PLACEHOLDER: needs measurement/verification from new mA1 recording.
-    # The shoreline node requires a real, connected, Z-up water plane.
+    # PROVISIONAL TF: 0.50 m below vessel_center (Z-up assumed).
+    # Its origin rotates with vessel roll/pitch; not a level earth plane.
     water_frame: ma1_water_plane
     water_level_m: 0.0
     min_height_m: 0.0
