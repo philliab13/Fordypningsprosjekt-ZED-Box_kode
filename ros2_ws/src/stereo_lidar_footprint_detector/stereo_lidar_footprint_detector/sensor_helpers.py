@@ -35,3 +35,12 @@ def nearest_cloud(clouds, timestamp, max_skew_s):
         return None
     cloud = min(clouds, key=lambda msg: abs(stamp_ns(msg) - timestamp))
     return cloud if abs(stamp_ns(cloud) - timestamp) <= max_skew_s * 1e9 else None
+
+def cloud_xyz(msg):
+    """Decode XYZ from PointCloud2 on Foxy and newer ROS 2 distributions."""
+    from sensor_msgs_py import point_cloud2
+    if hasattr(point_cloud2, 'read_points_numpy'):
+        return np.asarray(point_cloud2.read_points_numpy(
+            msg, field_names=('x', 'y', 'z'), skip_nans=True)).reshape(-1, 3)
+    return np.asarray(list(point_cloud2.read_points(
+        msg, field_names=('x', 'y', 'z'), skip_nans=True)), dtype=np.float32).reshape(-1, 3)
