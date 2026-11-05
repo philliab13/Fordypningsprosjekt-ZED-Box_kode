@@ -1,0 +1,17 @@
+zedx_footprint_detector:
+  ros__parameters:
+    left_topic: /zedx/zed_node/left/image_rect_color
+    depth_topic: /zedx/zed_node/depth/depth_registered
+    camera_info_topic: /zedx/zed_node/left/camera_info
+    lidar_topic: /lidar_aft/points
+    output_topic: /obstacles/json
+    weights: /opt/zed_official_ws/models/yolo26n-seg.engine
+    baseline_m: 0.120001
+    max_stereo_depth_m: 10.0
+    enable_lidar: false
+    require_lidar: false
+    # Provide correct TF and enable_lidar=true only when the LiDAR is present.
+    fixed_frame: ''
+    water_frame: ''
+    lidar_max_skew_s: 0.1
+    sync_slop_s: 0.03
