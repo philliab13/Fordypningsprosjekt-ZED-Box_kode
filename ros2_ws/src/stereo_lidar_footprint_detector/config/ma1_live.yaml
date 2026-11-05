@@ -19,7 +19,6 @@ zedx_footprint_detector:
     # UNVERIFIED: do not invent TF or reference frame. LiDAR fusion requires
     # camera optical <-> actual lidar frame TF and shared timestamps.
     fixed_frame: ''
-    # Leave blank until the new mA1 recording establishes a connected,
-    # calibrated, Z-up water-plane frame. Resulting footprints before that
-    # are NOT calibrated map/water-plane footprints.
-    water_frame: ''
+    # PROVISIONAL: vessel_center -> ma1_water_plane is z=-0.50 m.
+    # Geometry is only approximate until the true mounting is measured.
+    water_frame: ma1_water_plane
