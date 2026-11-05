@@ -16,5 +16,6 @@ setup(
     entry_points={'console_scripts': [
         'zedx_footprint_node = stereo_lidar_footprint_detector.zedx_node:main',
         'ma2_svo_player = stereo_lidar_footprint_detector.ma2_svo_player:main',
+        'ma2_pose_clock = stereo_lidar_footprint_detector.pose_clock_relay:main',
     ]},
 )
