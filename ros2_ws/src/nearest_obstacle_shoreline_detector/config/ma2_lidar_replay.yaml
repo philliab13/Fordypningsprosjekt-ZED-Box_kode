@@ -1,0 +1,16 @@
+lidar_water_projection:
+  ros__parameters:
+    use_sim_time: true
+    lidar_topic: /lidar_aft/points
+    # Must be the actual Z-UP water-plane frame connected to the bag's LiDAR TF.
+    # Old MA2 project used the validated ma2_water_plane -> ma2_water_plane_up flip.
+    water_frame: ma2_water_plane_up
+    water_level_m: 0.0
+    min_height_m: 0.0
+    max_height_m: 2.0
+    sector_width_deg: 2.0
+    min_sector_points: 2
+    range_cluster_m: 1.0
+    min_range_m: 1.0
+    max_range_m: 150.0
+    max_segment_m: 20.0
