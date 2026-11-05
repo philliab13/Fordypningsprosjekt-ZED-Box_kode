@@ -253,37 +253,72 @@ class MA2SVOPlayer(Node):
             self.seek_to_start(start_ns)
 
     def seek_to_start(self, start_ns):
-        """Seek ONCE during initialization, never in the clock callback.
+        """Seek once by recorded SVO timestamps, not nominal camera FPS.
 
-        Frame index is estimated using the first SVO acquisition timestamp,
-        with a short safety margin. No neural depth is computed for skipped
-        frames. All frames after the seek use the original clock gating.
+        The file reports a nominal 15 FPS but may contain substantial
+        timestamp gaps. Using fps * duration can therefore overshoot
+        the rosbag start by tens of seconds. Binary-search the frames
+        using their actual acquisition timestamps, adjusted by claps.
+        After searching, decode exactly one candidate frame with the
+        existing image/depth retrieval pipeline.
         """
-        fps = float(self.zed.get_camera_information().camera_configuration.fps)
-        if fps <= 0:
-            raise RuntimeError('Invalid SVO FPS for one-time initial seek')
-        gap_ns = start_ns - self.next_stamp_ns
-        if gap_ns <= 1_000_000_000:
+        if self.next_stamp_ns >= start_ns:
             self.get_logger().info(
-                f'No initial SVO seek needed; gap={gap_ns / 1e9:.2f}s')
+                'SVO first frame is at/after bag start; no initial seek')
             return
         frame_count = int(self.zed.get_svo_number_of_frames())
-        # Leave 0.5 second before the requested timestamp to avoid jumping
-        # beyond the first frame aligned with the rosbag.
-        delta_frames = max(0, int((gap_ns - 500_000_000) * fps / 1e9))
-        current_frame = int(self.zed.get_svo_position())
-        target_frame = min(frame_count - 1, current_frame + delta_frames)
+        if frame_count < 1:
+            raise RuntimeError('SVO contains no frames')
+
+        # Find the LAST SVO frame whose corrected timestamp is <= the
+        # requested bag start, so we do not silently skip over the
+        # beginning of the requested recording.
+        low, high = 0, frame_count - 1
+        best_frame = None
+        best_stamp = None
+        probes = 0
+        while low <= high:
+            middle = (low + high) // 2
+            status = self.zed.set_svo_position(middle)
+            if status is not None and status != sl.ERROR_CODE.SUCCESS:
+                raise RuntimeError(
+                    f'SVO seek to frame {middle} failed: {status}')
+            grab_status = self.zed.grab(self.runtime_parameters)
+            if grab_status != sl.ERROR_CODE.SUCCESS:
+                raise RuntimeError(
+                    f'SVO timestamp probe failed at frame {middle}: '
+                    f'{grab_status}')
+            timestamp = int(
+                self.zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).data_ns
+            ) + self.time_offset_ns
+            probes += 1
+            if timestamp <= start_ns:
+                best_frame, best_stamp = middle, timestamp
+                low = middle + 1
+            else:
+                high = middle - 1
+
+        target_frame = 0 if best_frame is None else best_frame
         self.get_logger().info(
-            f'Initial SVO seek: frame {current_frame} -> {target_frame} '
-            f'of {frame_count} (gap={gap_ns / 1e9:.2f}s)')
-        self.zed.set_svo_position(target_frame)
+            f'Initial SVO timestamp search: target frame '
+            f'{target_frame}/{frame_count}, probes={probes}, '
+            f'candidate_stamp={best_stamp}, bag_start={start_ns}')
+
+        status = self.zed.set_svo_position(target_frame)
+        if status is not None and status != sl.ERROR_CODE.SUCCESS:
+            raise RuntimeError(
+                f'SVO final seek to frame {target_frame} failed: {status}')
         self.load_next_frame()
         if not self.next_frame_ready:
-            raise RuntimeError('No SVO frame found after initial seek')
+            raise RuntimeError('No SVO frame after final seek')
+        delta_ms = (start_ns - self.next_stamp_ns) / 1e6
         self.get_logger().info(
             f'Initial seek complete: next_svo={self.next_stamp_ns}, '
-            f'bag_start={start_ns}, '
-            f'diff_ms={(start_ns - self.next_stamp_ns)/1e6:.1f}')
+            f'bag_start={start_ns}, diff_ms={delta_ms:.1f}')
+        if abs(delta_ms) > 2000:
+            self.get_logger().warning(
+                'SVO frame nearest bag start is over 2 seconds away. '
+                'Check SVO timestamps or sparse recording sections.')
 
     def load_next_frame(self):
         while True:
