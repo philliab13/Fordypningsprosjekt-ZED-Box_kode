@@ -115,7 +115,7 @@ class MA2SVOPlayer(Node):
         )
 
         init_parameters.depth_mode = (
-            sl.DEPTH_MODE.NEURAL
+            sl.DEPTH_MODE.PERFORMANCE
         )
 
         init_parameters.coordinate_units = (
