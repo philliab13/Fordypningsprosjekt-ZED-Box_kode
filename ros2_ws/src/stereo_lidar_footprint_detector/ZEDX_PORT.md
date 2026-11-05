@@ -42,12 +42,14 @@ ros2 topic echo /obstacles/json
 
 ## Coordinate safety
 
-The current test has no boat LiDAR and no camera-to-water TF.
+The live-camera configuration has no boat LiDAR and no camera-to-water TF. A separate MA2 rosbag profile enables time-matched LiDAR and TF.
 It runs the original stereo-only obstacle algorithm using empty LiDAR inputs.
 Polygon coordinates are on the original **synthetic camera-right/forward plane**,
 not a geographic or vessel-local water plane. Never feed them directly to
 the docking planner without transforming into a verified physical frame.
 
-The port has not yet been runtime-tested on the Jetson; check the TensorRT
+The LiDAR extensions have not yet been runtime-tested on the Jetson; check the TensorRT
 engine and Python dependencies. Measure final obstacle topic FPS as well as
 processing time before drawing performance conclusions.
+
+For rosbag + SVO and LiDAR-only shoreline replay instructions, see repository root `ROS_BAG_LIDAR_TEST.md`.
