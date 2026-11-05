@@ -1,0 +1,20 @@
+zedx_footprint_detector:
+  ros__parameters:
+    use_sim_time: true
+    # These image and depth topics require recorded image messages or the
+    # corresponding SVO player. The LiDAR-only rosbag cannot supply them.
+    left_topic: /ma2/zed/left/image
+    depth_topic: /ma2/zed/depth
+    camera_info_topic: /ma2/zed/camera_info
+    lidar_topic: /lidar_aft/points
+    output_topic: /obstacles/json
+    weights: /opt/zed_official_ws/models/yolo26n-seg.engine
+    baseline_m: 0.12
+    max_stereo_depth_m: 20.0
+    enable_lidar: true
+    require_lidar: true
+    lidar_max_skew_s: 0.5
+    sync_slop_s: 0.03
+    # Must exist in replayed /tf or be published from verified calibration.
+    fixed_frame: piren
+    water_frame: ma2_water_plane
