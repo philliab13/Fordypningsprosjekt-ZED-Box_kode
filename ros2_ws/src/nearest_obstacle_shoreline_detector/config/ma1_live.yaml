@@ -1,0 +1,19 @@
+# Live milliAmpere1 front Ouster. Frame from MA1-test checklist is provisional.
+# Validate cloud header frame, water-frame existence/orientation and TF
+# connectivity on actual mA1 before interpreting boundary positions.
+lidar_water_projection:
+  ros__parameters:
+    use_sim_time: false
+    lidar_topic: /front_lidar/ouster/points
+    # PLACEHOLDER: needs measurement/verification from new mA1 recording.
+    # The shoreline node requires a real, connected, Z-up water plane.
+    water_frame: ma1_water_plane
+    water_level_m: 0.0
+    min_height_m: 0.0
+    max_height_m: 2.0
+    sector_width_deg: 2.0
+    min_sector_points: 2
+    range_cluster_m: 1.0
+    min_range_m: 1.0
+    max_range_m: 150.0
+    max_segment_m: 20.0
