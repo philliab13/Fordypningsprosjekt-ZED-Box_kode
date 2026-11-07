@@ -9,7 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
-from sensor_msgs_py import point_cloud2
+from . import cloud_writer
 from .pointcloud import read_points_numpy
 from std_msgs.msg import Header, String
 from visualization_msgs.msg import Marker, MarkerArray
@@ -77,9 +77,9 @@ class LidarProjectionNode(Node):
             status = str(exc)
         for publisher, xyz in ((self.filtered_pub, filtered), (self.projected_pub, projected)):
             rows = np.column_stack((xyz, heights)).astype(np.float32)
-            publisher.publish(point_cloud2.create_cloud(header, self.fields, rows))
+            publisher.publish(cloud_writer.create_cloud(header, self.fields, rows))
         supported = boundary[np.isfinite(boundary).all(axis=1)]
-        self.boundary_pub.publish(point_cloud2.create_cloud_xyz32(header, supported))
+        self.boundary_pub.publish(cloud_writer.create_cloud_xyz32(header, supported))
         markers = [Marker(header=header, action=Marker.DELETEALL)]
         if len(segments):
             marker = Marker(header=header, ns='lidar_boundary', id=0,
