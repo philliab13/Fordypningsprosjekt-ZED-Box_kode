@@ -98,7 +98,7 @@ class FootprintNode(Node):
                 (CameraInfo, "camera_info_topic"),
             ]
         ]
-        self.sync = message_filters.ApproximateTimeSynchronizer(self.inputs, 5, 0.03)
+        self.sync = message_filters.ApproximateTimeSynchronizer(self.inputs, 5, 0.2)
         self.sync.registerCallback(self.receive_frame)
         self.yolo_image_pub = self.create_publisher(
             Image,
