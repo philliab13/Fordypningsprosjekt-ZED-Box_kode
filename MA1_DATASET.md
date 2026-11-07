@@ -19,14 +19,15 @@ The recorded TF graph has these disconnected roots: `vessel_center`
 (parent of ZED frames). The TF launch adds ONLY the missing roots:
 
 - `vessel_center -> base_link`: xyz **[0.90, 0.00, 2.18] m**, identity rotation.
-- `vessel_center -> os_sensor`: xyz **[2.00, 1.00, 0.00] m**, identity rotation.
+- `vessel_center -> os_sensor`: xyz **[2.00, 1.00, 0.922] m**, identity rotation.
+- `os_sensor -> os_lidar`: existing Ouster driver TF, xyz **[0, 0, 0.078] m**, **180° yaw**. This places `os_lidar` at **[2.00, 1.00, 1.00] m** relative to `vessel_center` (1.30 m above water).
 - `vessel_center -> ma1_water_plane`: xyz **[0, 0, -0.30] m**, identity rotation.
 
-**Important:** These mounting values assume `vessel_center` has +X forward
-and +Z up, and that the physical camera measurement refers to `base_link`.
-Confirm the frame conventions and existing TF before publishing. If the vessel
-frame is NED/Z-down, the water transform and shoreline height filtering MUST
-be adjusted. A missing/incorrect TF chain invalidates the geometry.
+**Important:** These mounting values use the confirmed `vessel_center` +Z-up
+convention and assume the camera measurement refers to `base_link`. The Ouster
+sensor-to-LiDAR transform is taken from the recorded TF data, and its 0.078 m
+vertical offset must not be counted twice. Confirm the frame IDs and parent
+relationships before publishing. Missing/incorrect TF invalidates geometry.
 
 ## On ZED Box after checking out this branch
 
