@@ -80,17 +80,18 @@ class LidarProjectionNode(Node):
             publisher.publish(cloud_writer.create_cloud(header, self.fields, rows))
         supported = boundary[np.isfinite(boundary).all(axis=1)]
         self.boundary_pub.publish(cloud_writer.create_cloud_xyz32(header, supported))
-        markers = [Marker(header=header, action=Marker.DELETEALL)]
+        # Updating an existing (namespace, id) replaces the previous line.
+        # A single marker per array avoids RViz's duplicate-ID validation.
+        marker = Marker(header=header, ns='lidar_boundary', id=0,
+                        type=Marker.LINE_LIST,
+                        action=Marker.ADD if len(segments) else Marker.DELETE)
         if len(segments):
-            marker = Marker(header=header, ns='lidar_boundary', id=0,
-                            type=Marker.LINE_LIST, action=Marker.ADD)
             marker.pose.orientation.w = 1.0
             marker.scale.x = 0.15
             marker.color.r, marker.color.g, marker.color.a = 1.0, 0.5, 1.0
             marker.points = [Point(x=float(x), y=float(y), z=float(z))
                              for segment in segments for x, y, z in segment]
-            markers.append(marker)
-        self.barrier_pub.publish(MarkerArray(markers=markers))
+        self.barrier_pub.publish(MarkerArray(markers=[marker]))
         self.json_pub.publish(String(data=json.dumps(dict(
             frame_id=header.frame_id,
             stamp=dict(sec=header.stamp.sec, nanosec=header.stamp.nanosec),
