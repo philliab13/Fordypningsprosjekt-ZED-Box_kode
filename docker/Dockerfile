@@ -17,11 +17,14 @@ RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
        ros-foxy-ros-base ros-foxy-sensor-msgs ros-foxy-std-msgs \
+       ros-foxy-message-filters ros-foxy-tf2-ros ros-foxy-visualization-msgs \
+       python3-scipy \
        python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/zed_ws
 COPY ros2_ws/src/zed_box_perception /opt/zed_ws/src/zed_box_perception
+COPY ros2_ws/src/stereo_lidar_footprint_detector /opt/zed_ws/src/stereo_lidar_footprint_detector
 RUN /bin/bash -c 'source /opt/ros/foxy/setup.bash && colcon build --symlink-install'
 
 CMD ["/bin/bash"]
