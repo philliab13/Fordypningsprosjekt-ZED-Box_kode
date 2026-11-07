@@ -1,0 +1,15 @@
+# milliAmpere1 recorded ZED 2 + forward Ouster; load with --params-file.
+# Model path and baseline are set on the command line (baseline MUST be validated).
+stereo_lidar_footprint_detector:
+  ros__parameters:
+    left_topic: /zed2/zed_node/left/image_rect_color
+    depth_topic: /zed2/zed_node/depth/depth_registered
+    camera_info_topic: /zed2/zed_node/left/camera_info
+    lidar_topic: /front_lidar/ouster/points
+    output_topic: /obstacles/json
+    water_frame: ma1_water_plane
+    use_lidar: true
+    require_lidar: false
+    lidar_max_skew_s: 0.5
+    max_stereo_depth_m: 20.0
+    fixed_frame: ""

@@ -22,12 +22,10 @@ from stixel_free_space.core import (
     stamp_ns,
     transform_matrix,
 )
-from stixel_free_space.ma2_calibration import (
-    H_POINTS_ZED_FROM_LIDAR,
-)
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import MarkerArray
 
+from .transforms import camera_from_lidar
 from .backend import PipelineBackend
 from .images import image_array
 from .visualization import (
@@ -54,6 +52,7 @@ class FootprintNode(Node):
             lidar_max_skew_s=0.5,
             require_lidar=False,
             use_lidar=True,  # False: ignore LiDAR entirely; estimate from stereo depth
+            fixed_frame="",  # Optional stationary frame for motion compensation
         )
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -181,11 +180,14 @@ class FootprintNode(Node):
                     cloud, field_names=("x", "y", "z"), skip_nans=True
                 )
 
-                # Same calibrated LiDAR-to-ZED transform
-                # as the original MA2 stixel pipeline.
+                # Use the sensor frames and timestamps from the live messages.
+                # No MA2-specific extrinsics are valid on mA1.
                 uv, xyz = project_lidar(
                     points,
-                    H_POINTS_ZED_FROM_LIDAR,
+                    camera_from_lidar(
+                        self.tf_buffer, image.header, cloud.header,
+                        self.p["fixed_frame"],
+                    ),
                     k,
                     left.shape[:2],
                 )

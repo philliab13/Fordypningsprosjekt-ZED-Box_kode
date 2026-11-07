@@ -1,3 +1,4 @@
+from glob import glob
 from setuptools import find_packages, setup
 
 setup(
@@ -7,6 +8,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/stereo_lidar_footprint_detector"]),
         ("share/stereo_lidar_footprint_detector", ["package.xml"]),
+        ("share/stereo_lidar_footprint_detector/config", glob("config/*.yaml")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
