@@ -23,7 +23,7 @@ class LidarProjectionNode(Node):
     def __init__(self):
         super().__init__('lidar_water_projection')
         defaults = dict(lidar_topic='/lidar_aft/points', water_frame='ma2_water_plane_up',
-                        global_frame='piren',
+                        global_frame='piren', global_tf_use_latest=False,
                         water_level_m=0.0, min_height_m=0.0, max_height_m=2.0,
                         sector_width_deg=2.0, min_sector_points=2, range_cluster_m=1.0,
                         min_range_m=1.0, max_range_m=100.0, max_segment_m=3.0)
@@ -99,11 +99,14 @@ class LidarProjectionNode(Node):
             stamp=dict(sec=header.stamp.sec, nanosec=header.stamp.nanosec),
             status=status, segments=segments.tolist()), allow_nan=False)))
 
-        # Convert the already-detected shoreline into the global navigation frame.
-        # Never label local coordinates as global when the timestamped TF is absent.
+        # False: match the LiDAR timestamp. True: use the latest available TF
+        # (useful for bags with sensor-relative LiDAR stamps). The latter may
+        # introduce spatial error when the vessel moves.
+        lookup_time = (Time() if self.p['global_tf_use_latest']
+                       else Time.from_msg(header.stamp))
         try:
             global_transform = transform_matrix(self.buffer.lookup_transform(
-                self.p['global_frame'], header.frame_id, Time.from_msg(header.stamp),
+                self.p['global_frame'], header.frame_id, lookup_time,
                 timeout=Duration(seconds=0.0)).transform)
             global_segments = transform_segments(segments, global_transform)
         except (ValueError, TransformException, RuntimeError, AssertionError) as exc:
