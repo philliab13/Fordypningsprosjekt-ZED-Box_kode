@@ -44,7 +44,8 @@ Published topics:
 - `/lidar_water_projection/projected_points` — flattened water points
 - `/lidar_water_projection/boundary_points` — sector representatives
 - `/lidar_water_projection/barrier` — MarkerArray line segments
-- `/lidar_water_projection/barrier_json` — unchanged JSON output schema
+- `/lidar_water_projection/barrier_json` — unchanged JSON output schema in the configured water frame
+- `/lidar_water_projection/barrier_json_piren` — same schema with segment endpoints transformed into the configured `global_frame` (default `piren`)
 
 To overlay on the main PC's BEV viewer:
 
@@ -65,3 +66,23 @@ shoreline classification. Boats can appear in it.
    Preserved the original `inputs.py` helper as-is.
 4. No change to input/output topics, height thresholds, sectors, JSON
    format, or output coordinate frame.
+
+## Global shoreline output (mA1)
+
+With `config/ma1.yaml`, the original JSON remains in `ma1_water_plane`,
+and `/lidar_water_projection/barrier_json_piren` is published in `piren`.
+Both use the original LiDAR measurement timestamp. The global output requires
+a TF chain from `piren` to `ma1_water_plane` at that timestamp, including
+the dynamic vessel pose (e.g. `piren -> vessel_center`) and the static
+`vessel_center -> ma1_water_plane` mount. This package does not supply
+the dynamic global-to-vessel transform.
+
+If the global TF is missing, the original local output continues unchanged;
+the global JSON for that scan is skipped with a throttled warning instead
+of publishing incorrectly framed coordinates. Global XYZ values are not
+flattened again after TF: they represent the transformed water-plane points.
+Example:
+
+```bash
+ros2 topic echo /lidar_water_projection/barrier_json_piren --once
+```
