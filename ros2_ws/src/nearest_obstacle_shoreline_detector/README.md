@@ -71,11 +71,24 @@ shoreline classification. Boats can appear in it.
 
 With `config/ma1.yaml`, the original JSON remains in `ma1_water_plane`,
 and `/lidar_water_projection/barrier_json_piren` is published in `piren`.
-Both use the original LiDAR measurement timestamp. The global output requires
-a TF chain from `piren` to `ma1_water_plane` at that timestamp, including
+The JSON `stamp` in both topics is the original LiDAR message timestamp.
+The global output requires a TF chain from `piren` to `ma1_water_plane`, including
 the dynamic vessel pose (e.g. `piren -> vessel_center`) and the static
 `vessel_center -> ma1_water_plane` mount. This package does not supply
 the dynamic global-to-vessel transform.
+
+`global_tf_use_latest` controls which TF timestamp is requested:
+- `false` (node default): lookup at the LiDAR measurement timestamp, as before.
+- `true` (`config/ma1.yaml`): lookup the most recent available global TF,
+  allowing playback when LiDAR stamps use a different clock than the navigation
+  poses. This is approximate: the boat may move between the scan and the pose.
+  The output JSON `stamp` remains the original LiDAR stamp, **not** the TF
+  pose timestamp. Do not assume measurement and pose were synchronized.
+
+Override from the command line with `--ros-args -p global_tf_use_latest:=false`
+when running the executable directly, or edit `config/ma1.yaml` and restart
+the launch file. For accurate live navigation, keep `false` with synchronized
+sensor and navigation timestamps.
 
 If the global TF is missing, the original local output continues unchanged;
 the global JSON for that scan is skipped with a throttled warning instead
