@@ -88,3 +88,21 @@ def test_invalid_boundary_parameters(kwargs):
     from nearest_obstacle_shoreline_detector.lidar_projection import nearest_boundary
     with pytest.raises(ValueError):
         nearest_boundary([], [0, 0], **kwargs)
+
+
+
+def test_transform_segments_translation_and_rotation():
+    from nearest_obstacle_shoreline_detector.lidar_projection import transform_segments
+    segments = np.array([[[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]]])
+    tf = np.eye(4)
+    tf[:3, :3] = [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
+    tf[:3, 3] = [10.0, -3.0, 2.0]
+    output = transform_segments(segments, tf)
+    np.testing.assert_allclose(output, [[[10.0, -2.0, 2.0], [8.0, -3.0, 2.0]]])
+    np.testing.assert_allclose(segments, [[[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]]])
+
+
+def test_transform_segments_empty_shape():
+    from nearest_obstacle_shoreline_detector.lidar_projection import transform_segments
+    output = transform_segments(np.empty((0, 2, 3)), np.eye(4))
+    assert output.shape == (0, 2, 3)
