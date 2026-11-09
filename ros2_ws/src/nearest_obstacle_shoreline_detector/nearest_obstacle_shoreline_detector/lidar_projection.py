@@ -69,3 +69,14 @@ def nearest_boundary(points, origin_xy, sector_width_deg=2.0, min_points=2,
     connected &= np.linalg.norm(following - boundary, axis=1) <= max_segment_m
     segments = np.stack((boundary[connected], following[connected]), axis=1)
     return boundary, segments
+
+
+def transform_segments(segments, target_from_source):
+    """Transform both endpoints of each (N, 2, 3) segment to the target frame."""
+    transform = np.asarray(target_from_source, dtype=float)
+    if transform.shape != (4, 4) or not np.isfinite(transform).all():
+        raise ValueError('Expected a finite 4x4 frame transform')
+    segments = np.asarray(segments, dtype=float).reshape(-1, 2, 3)
+    if not np.isfinite(segments).all():
+        raise ValueError('Segment coordinates must be finite')
+    return segments @ transform[:3, :3].T + transform[:3, 3]
