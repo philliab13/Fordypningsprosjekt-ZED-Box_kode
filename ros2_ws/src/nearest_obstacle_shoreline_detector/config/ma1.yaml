@@ -5,6 +5,7 @@ lidar_water_projection:
     lidar_topic: /front_lidar/ouster/points
     water_frame: ma1_water_plane
     global_frame: piren
+    global_tf_use_latest: true  # Recorded LiDAR stamps are sensor-relative
     water_level_m: 0.0
     min_height_m: 0.0
     max_height_m: 2.0
