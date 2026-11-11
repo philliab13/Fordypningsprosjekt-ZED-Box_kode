@@ -1,5 +1,10 @@
 # ZED Box perception publisher — mA1
 
+For the **standalone nearest-obstacle shoreline detector on an Ubuntu 22.04 /
+ROS 2 Humble computer**, use [the shoreline Docker Compose setup](docker/shoreline/README.md).
+That container has no ZED Box or GPU dependency. The camera/Jetson instructions
+below describe the separate original system.
+
 ROS 2 **Foxy** package for the ZED 2 / Jetson Orin NX **JetPack 5.1.1**, using the existing **ZED SDK 4.0.x** and the previously working **Ultralytics TensorRT** image. Designed for **one central ROS 2 Humble rosbag recorder** aboard mA1.
 
 This is a focused camera publisher based on the **Stereolabs ZED ROS 2 wrapper's conventions**, not a fork of the full wrapper. See https://github.com/stereolabs/zed-ros2-wrapper and https://docs.stereolabs.com/docs/integrations/ros-2 . The upstream wrapper provides many features not implemented here (tracking, positional tracking, TF URDF, diagnostics). **Do not run the official wrapper and this camera node simultaneously**: both would try to open the same ZED camera.
