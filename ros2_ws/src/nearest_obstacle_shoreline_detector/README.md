@@ -4,6 +4,11 @@ Port of the LiDAR-only `lidar_projection_node` from
 `Fordypningsprosjekt-ros-kode/src/nearest_obstacle_shoreline_detector`.
 No FastSAM, RWPS, segmentation models or `shoreline_node` are included.
 
+For a standalone CPU container on an **Ubuntu 22.04 / ROS 2 Humble computer**,
+see [Docker Compose setup](../../../docker/shoreline/README.md). It runs alongside
+the milliAmpere boat/simulator containers with host networking and privileged
+access, without ZED or Jetson dependencies.
+
 The filtering and sector-boundary algorithms are copied **unchanged**. The
 only runtime code change is using a local Foxy-compatible vectorized
 `PointCloud2` XYZ reader instead of `sensor_msgs_py.point_cloud2.read_points_numpy`.

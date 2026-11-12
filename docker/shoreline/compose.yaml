@@ -1,0 +1,29 @@
+name: ma1-shoreline
+
+services:
+  shoreline:
+    image: ma1-shoreline:humble
+    build:
+      context: ../..
+      dockerfile: docker/shoreline/Dockerfile
+    network_mode: host
+    ipc: host
+    privileged: true
+    init: true
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: "0"
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      USE_SIM_TIME: ${USE_SIM_TIME:-false}
+      PARAMS_FILE: ${PARAMS_FILE:-/config/ma1-live.yaml}
+    volumes:
+      - /dev:/dev
+      - ./ma1-live.yaml:/config/ma1-live.yaml:ro
+      - ../../ros2_ws/src/nearest_obstacle_shoreline_detector/config:/config/package:ro
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

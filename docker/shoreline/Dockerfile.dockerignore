@@ -1,0 +1,14 @@
+**
+!ros2_ws/
+!ros2_ws/src/
+!ros2_ws/src/nearest_obstacle_shoreline_detector/
+!ros2_ws/src/nearest_obstacle_shoreline_detector/**
+!docker/
+!docker/shoreline/
+!docker/shoreline/entrypoint.sh
+!docker/shoreline/ma1-live.yaml
+**/__pycache__/
+**/*.pyc
+**/build/
+**/install/
+**/log/
